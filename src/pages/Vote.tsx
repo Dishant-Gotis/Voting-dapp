@@ -58,26 +58,23 @@ export const VotePage: React.FC = () => {
         setElectionId(chosen.id)
 
         // Fetch election with parties
-        const ep = await getElectionWithParties(chosen.id)
-        if (!ep) throw new Error('Failed to load election data')
+        const updateFromBackend = async () => {
+          const ep = await getElectionWithParties(chosen.id)
+          if (!ep) return
+          const resultsMap = await getElectionResults(chosen.id)
+          const totalVotes = Object.values(resultsMap).reduce((a: number, b: any) => a + (b as number), 0)
+          const mapped: Party[] = (ep.parties || []).map((p: any) => {
+            const count = (resultsMap as any)[p.id] || 0
+            const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0
+            return { id: p.id, name: p.name, emoji: '🗳️', votes: count, percentage: pct }
+          })
+          if (mounted) setParties(mapped)
+        }
 
-        // Fetch live tally from votes to compute percentages
-        const resultsMap = await getElectionResults(chosen.id)
-        const totalVotes = Object.values(resultsMap).reduce((a: number, b: any) => a + (b as number), 0)
-
-        const mappedParties: Party[] = (ep.parties || []).map((p: any) => {
-          const count = (resultsMap as any)[p.id] || 0
-          const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0
-          return {
-            id: p.id,
-            name: p.name,
-            emoji: '🗳️',
-            votes: count,
-            percentage: pct,
-          }
-        })
-
-        if (mounted) setParties(mappedParties)
+        await updateFromBackend()
+        // Lightweight polling for realtime feel
+        const interval = setInterval(updateFromBackend, 2500)
+        return () => clearInterval(interval)
       } catch (err) {
         if (mounted) setLoadError(err instanceof Error ? err.message : 'Failed to load election')
       } finally {
@@ -85,8 +82,8 @@ export const VotePage: React.FC = () => {
       }
     }
 
-    bootstrap()
-    return () => { mounted = false }
+    const cleanup = bootstrap()
+    return () => { mounted = false; (async () => { const c = await cleanup; if (typeof c === 'function') c() })() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
@@ -107,6 +104,8 @@ export const VotePage: React.FC = () => {
       setVoteResult(result)
       setVoted(true)
       setShowConfirmation(false)
+      // trigger a quick refresh to reflect new totals
+      // state polling above will also catch it
     } catch (error) {
       console.error('Error casting vote:', error)
       alert('Failed to cast vote. Please try again.')

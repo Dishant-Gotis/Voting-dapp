@@ -29,6 +29,46 @@ export class DemoAdminAdapter implements IAdminAdapter {
   }
 
   /**
+   * Permanently delete an election (and related data via CASCADE)
+   */
+  async deleteElection(electionId: string): Promise<AdminActionResult> {
+    if (!this.adminId || !this.adminEmail) {
+      return { success: false, message: 'Admin not authenticated' }
+    }
+
+    try {
+      const { error } = await supabase
+        .from('elections')
+        .delete()
+        .eq('id', electionId)
+
+      if (error) throw error
+
+      await logAuditAction(
+        'ELECTION_DELETED',
+        this.adminEmail,
+        'ELECTION',
+        electionId,
+        {}
+      )
+
+      this.broadcastAdminAction('ELECTION_DELETED', { electionId })
+
+      return {
+        success: true,
+        message: 'Election deleted successfully',
+        data: { electionId },
+      }
+    } catch (error) {
+      console.error('Failed to delete election:', error)
+      return {
+        success: false,
+        message: `Failed to delete election: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      }
+    }
+  }
+
+  /**
    * Authenticate admin via email/password credentials
    * Validates against Supabase Auth
    */

@@ -51,9 +51,11 @@ export const AdminPage: React.FC = () => {
   }
 
   useEffect(() => {
-    if (isLoggedIn) {
-      refreshElections()
-    }
+    if (!isLoggedIn) return
+    let active = true
+    refreshElections()
+    const interval = setInterval(() => { if (active) refreshElections() }, 3000)
+    return () => { active = false; clearInterval(interval) }
   }, [isLoggedIn])
 
   const handleCaptchaVerify = () => {
@@ -297,6 +299,26 @@ export const AdminPage: React.FC = () => {
                   >
                     + Add Parties
                   </Button>
+                  {election.status === 'DRAFT' && (
+                    <Button
+                      variant="primary" size="sm"
+                      onClick={async () => { await adminAdapter.startElection(election.id); refreshElections() }}
+                    >Start</Button>
+                  )}
+                  {(election.status === 'ACTIVE' || election.status === 'ONGOING') && (
+                    <Button
+                      variant="secondary" size="sm"
+                      onClick={async () => { await adminAdapter.endElection(election.id); refreshElections() }}
+                    >End</Button>
+                  )}
+                  <Button
+                    variant="secondary" size="sm"
+                    onClick={async () => {
+                      if (!confirm('Delete this election? This action cannot be undone.')) return
+                      const res = await adminAdapter.deleteElection(election.id)
+                      if (res.success) { toast.success('Election deleted'); refreshElections() } else { toast.error(res.message) }
+                    }}
+                  >Delete</Button>
                 </div>
               </div>
             ))}

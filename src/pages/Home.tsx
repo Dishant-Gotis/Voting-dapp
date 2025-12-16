@@ -23,7 +23,8 @@ export const HomePage: React.FC = () => {
       }
     }
     load()
-    return () => { mounted = false }
+    const interval = setInterval(() => { load() }, 5000)
+    return () => { mounted = false; clearInterval(interval) }
   }, [])
   return (
     <div className="min-h-screen">

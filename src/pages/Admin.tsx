@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
@@ -6,6 +6,8 @@ import { Modal } from '@/components/Modal'
 import { useVotingMode } from '@/context/VotingContext'
 import { DemoAdminAdapter } from '@/adapters/DemoAdminAdapter'
 import toast from 'react-hot-toast'
+import { adapterFactory } from '@/adapters/AdapterFactory'
+import type { Election } from '@/adapters/IElectionAdapter'
 
 type AdminStep = 'captcha' | 'wallet' | 'login' | 'dashboard'
 
@@ -29,12 +31,30 @@ export const AdminPage: React.FC = () => {
   const adminAdapterRef = useRef(new DemoAdminAdapter())
   const adminAdapter = adminAdapterRef.current
 
-  // Mock data
-  const elections = [
-    { id: 1, title: 'General Elections 2024', status: 'ONGOING', votes: 1200000 },
-    { id: 2, title: 'Local Council 2024', status: 'ENDED', votes: 450000 },
-    { id: 3, title: 'Municipal Elections', status: 'DRAFT', votes: 0 }
-  ]
+  // Elections from backend
+  const [elections, setElections] = useState<Election[]>([])
+  const [loadingElections, setLoadingElections] = useState(false)
+  const [showAddParties, setShowAddParties] = useState(false)
+  const [selectedElectionId, setSelectedElectionId] = useState<string | null>(null)
+  const [partiesText, setPartiesText] = useState('')
+
+  const refreshElections = async () => {
+    try {
+      setLoadingElections(true)
+      const list = await adapterFactory.getElectionAdapter().listElections()
+      setElections(list)
+    } catch (e) {
+      toast.error('Failed to load elections')
+    } finally {
+      setLoadingElections(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      refreshElections()
+    }
+  }, [isLoggedIn])
 
   const handleCaptchaVerify = () => {
     setStep(mode === 'BLOCKCHAIN' ? 'wallet' : 'login')
@@ -259,29 +279,30 @@ export const AdminPage: React.FC = () => {
         {/* Recent Elections */}
         <Card className="mb-8">
           <h2 className="text-2xl font-bold mb-6">Recent Elections</h2>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-slate-400 text-sm">{loadingElections ? 'Loading…' : `${elections.length} elections`}</p>
+            <Button variant="secondary" size="sm" onClick={refreshElections}>Refresh</Button>
+          </div>
           <div className="space-y-4">
             {elections.map((election) => (
               <div key={election.id} className="flex items-center justify-between p-4 bg-slate-800 rounded-lg">
                 <div>
                   <h3 className="font-bold text-slate-100">{election.title}</h3>
-                  <p className="text-slate-400 text-sm">
-                    {election.votes.toLocaleString()} votes cast
-                  </p>
+                  <p className="text-slate-400 text-sm">Status: {election.status}</p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                    election.status === 'ONGOING' ? 'bg-green-500/20 text-green-400' :
-                    election.status === 'ENDED' ? 'bg-yellow-500/20 text-yellow-400' :
-                    'bg-slate-500/20 text-slate-400'
-                  }`}>
-                    {election.status}
-                  </span>
-                  <Button variant="secondary" size="sm">
-                    Edit
+                <div className="flex items-center gap-3">
+                  <Button 
+                    variant="secondary" size="sm"
+                    onClick={() => { setSelectedElectionId(election.id); setShowAddParties(true); }}
+                  >
+                    + Add Parties
                   </Button>
                 </div>
               </div>
             ))}
+            {(!loadingElections && elections.length === 0) && (
+              <div className="p-4 bg-slate-800 rounded-lg text-slate-400 text-sm">No elections yet. Create one above.</div>
+            )}
           </div>
         </Card>
 
@@ -484,6 +505,57 @@ export const AdminPage: React.FC = () => {
           <Button variant="primary" className="w-full">
             Announce Results
           </Button>
+        </div>
+      </Modal>
+
+      {/* Add Parties Modal */}
+      <Modal
+        isOpen={showAddParties}
+        onClose={() => setShowAddParties(false)}
+        title="Add Parties"
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowAddParties(false)}>Cancel</Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                if (!selectedElectionId) return
+                const names = partiesText.split('\n').map(s => s.trim()).filter(Boolean)
+                if (names.length === 0) { toast.error('Enter at least one party'); return }
+                setIsSubmitting(true)
+                try {
+                  const payload = names.map((n, idx) => ({ name: n, order: idx + 1 }))
+                  const res = await adminAdapter.addParties(selectedElectionId, payload)
+                  if (res.success) {
+                    toast.success('Parties added')
+                    setShowAddParties(false)
+                    setPartiesText('')
+                  } else {
+                    toast.error(res.message)
+                  }
+                } catch (e) {
+                  toast.error('Failed to add parties')
+                } finally {
+                  setIsSubmitting(false)
+                }
+              }}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Saving…' : 'Save Parties'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-slate-400 text-sm">Enter one party name per line. Order is preserved.</p>
+          <textarea
+            value={partiesText}
+            onChange={(e) => setPartiesText(e.target.value)}
+            rows={8}
+            className="w-full rounded-md bg-slate-900 border border-slate-700 p-3 text-slate-100"
+            placeholder={"Unity Party\nProgress Alliance\nFuture Coalition"}
+          />
         </div>
       </Modal>
     </div>

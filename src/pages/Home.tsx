@@ -1,8 +1,30 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
+import { adapterFactory } from '@/adapters/AdapterFactory'
+import type { Election } from '@/adapters/IElectionAdapter'
 
 export const HomePage: React.FC = () => {
+  const [elections, setElections] = useState<Election[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        setLoading(true)
+        const list = await adapterFactory.getElectionAdapter().listElections()
+        if (mounted) setElections(list)
+      } catch (e) {
+        if (mounted) setError('Failed to load elections')
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -58,6 +80,40 @@ export const HomePage: React.FC = () => {
             <p className="text-lg text-slate-300 italic">
               "Transparent. Secure. Immutable." — Election Commission
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Elections Overview */}
+      <section className="py-16 px-4">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl font-bold mb-6">Elections</h2>
+          {loading && (
+            <Card className="mb-6"><p className="text-slate-400">Loading elections…</p></Card>
+          )}
+          {error && (
+            <Card className="mb-6 border-red-500/40"><p className="text-red-300">{error}</p></Card>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {elections.map((e) => (
+              <Card key={e.id} className="flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xl font-bold mb-2">{e.title}</h3>
+                  <p className="text-slate-400 text-sm mb-4">{e.description || '—'}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className={`px-2 py-1 rounded text-xs font-semibold border ${
+                    e.status === 'ONGOING' || e.status === 'PUBLISHED' ? 'border-green-500/40 text-green-300' :
+                    e.status === 'ENDED' || e.status === 'ANNOUNCED' ? 'border-yellow-500/40 text-yellow-300' :
+                    'border-slate-600 text-slate-300'
+                  }`}>{e.status}</span>
+                  <a href="/vote" className="text-blue-400 hover:text-blue-300 text-sm">Go Vote →</a>
+                </div>
+              </Card>
+            ))}
+            {(!loading && elections.length === 0) && (
+              <Card><p className="text-slate-400">No elections yet. Create one in the Admin panel.</p></Card>
+            )}
           </div>
         </div>
       </section>

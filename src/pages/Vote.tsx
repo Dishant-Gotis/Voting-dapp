@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Modal } from '@/components/Modal'
 import { useVotingMode } from '@/context/VotingContext'
 import { adapterFactory } from '@/adapters/AdapterFactory'
+import { getElectionWithParties, getElectionResults } from '@/services/supabaseClient'
 
 interface Party {
   id: string
@@ -16,19 +17,78 @@ interface Party {
 export const VotePage: React.FC = () => {
   const { mode } = useVotingMode()
   const votingAdapter = adapterFactory.getVotingAdapter()
+  const electionAdapter = adapterFactory.getElectionAdapter()
   
   const [selectedParty, setSelectedParty] = useState<Party | null>(null)
   const [voted, setVoted] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [voteResult, setVoteResult] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [electionId, setElectionId] = useState<string | null>(null)
+  const [parties, setParties] = useState<Party[]>([])
 
-  // Mock data
-  const parties: Party[] = [
-    { id: '1', name: 'Unity Party', emoji: '🔵', votes: 450000, percentage: 45 },
-    { id: '2', name: 'Progress Alliance', emoji: '🟢', votes: 300000, percentage: 30 },
-    { id: '3', name: 'Future Coalition', emoji: '🟡', votes: 250000, percentage: 25 }
-  ]
+  // On first load, fetch active election and parties from backend (Supabase in DEMO)
+  useEffect(() => {
+    let mounted = true
+
+    async function bootstrap() {
+      try {
+        setIsLoading(true)
+        setLoadError(null)
+
+        // Ensure demo identity in DEMO mode (wallet + user id for adapter)
+        if (mode === 'DEMO') {
+          const demo = adapterFactory.getDemoVotingAdapter()
+          const existingWallet = demo.getWalletAddress()
+          const existingUser = demo.getUserId()
+          if (!existingWallet) demo.setWalletAddress('0xDEMO000000000000000000000000000000000001')
+          if (!existingUser) demo.setUserId(`demo_${Date.now()}`)
+        }
+
+        // Pick the most recent ACTIVE election; if none, fall back to latest
+        const elections = await electionAdapter.listElections()
+        const active = elections.find((e: any) => (e.status === 'ACTIVE' || e.status === 'ONGOING'))
+        const chosen = active || elections[0]
+        if (!chosen) {
+          throw new Error('No elections found. Please create one from Admin.')
+        }
+        if (!mounted) return
+        setElectionId(chosen.id)
+
+        // Fetch election with parties
+        const ep = await getElectionWithParties(chosen.id)
+        if (!ep) throw new Error('Failed to load election data')
+
+        // Fetch live tally from votes to compute percentages
+        const resultsMap = await getElectionResults(chosen.id)
+        const totalVotes = Object.values(resultsMap).reduce((a: number, b: any) => a + (b as number), 0)
+
+        const mappedParties: Party[] = (ep.parties || []).map((p: any) => {
+          const count = (resultsMap as any)[p.id] || 0
+          const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0
+          return {
+            id: p.id,
+            name: p.name,
+            emoji: '🗳️',
+            votes: count,
+            percentage: pct,
+          }
+        })
+
+        if (mounted) setParties(mappedParties)
+      } catch (err) {
+        if (mounted) setLoadError(err instanceof Error ? err.message : 'Failed to load election')
+      } finally {
+        if (mounted) setIsLoading(false)
+      }
+    }
+
+    bootstrap()
+    return () => { mounted = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
 
   const handleVote = (party: Party) => {
     setSelectedParty(party)
@@ -41,7 +101,8 @@ export const VotePage: React.FC = () => {
     setIsSubmitting(true)
     try {
       // Call adapter based on mode
-      const result = await votingAdapter.castVote('election_1', selectedParty.id)
+      if (!electionId) throw new Error('Election not loaded')
+      const result = await votingAdapter.castVote(electionId, selectedParty.id)
       console.log('Vote result:', result)
       setVoteResult(result)
       setVoted(true)
@@ -116,6 +177,17 @@ export const VotePage: React.FC = () => {
   return (
     <div className="min-h-screen pt-32 pb-20 px-4">
       <div className="max-w-6xl mx-auto">
+        {/* Load state / errors */}
+        {isLoading && (
+          <Card className="mb-8">
+            <p className="text-slate-400">Loading election…</p>
+          </Card>
+        )}
+        {loadError && (
+          <Card className="mb-8 border-red-500/40">
+            <p className="text-red-300">{loadError}</p>
+          </Card>
+        )}
         {/* Election Header */}
         <Card className="mb-8 border-yellow-400">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

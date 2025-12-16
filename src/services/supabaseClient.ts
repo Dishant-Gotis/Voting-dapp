@@ -1,8 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Initialize Supabase client using Vite environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key'
+// Initialize Supabase client using Vite and CRA-style env variables
+const supabaseUrl =
+  (import.meta as any).env?.VITE_SUPABASE_URL ||
+  (import.meta as any).env?.REACT_APP_SUPABASE_URL ||
+  (typeof process !== 'undefined' ? (process as any).env?.REACT_APP_SUPABASE_URL : undefined) ||
+  'https://your-project.supabase.co'
+
+const supabaseAnonKey =
+  (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
+  (import.meta as any).env?.REACT_APP_SUPABASE_ANON_KEY ||
+  (typeof process !== 'undefined' ? (process as any).env?.REACT_APP_SUPABASE_ANON_KEY : undefined) ||
+  'your-anon-key'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 

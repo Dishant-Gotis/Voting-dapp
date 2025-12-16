@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
@@ -25,7 +25,9 @@ export const AdminPage: React.FC = () => {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   
-  const adminAdapter = new DemoAdminAdapter()
+  // Use useRef to maintain single instance across renders
+  const adminAdapterRef = useRef(new DemoAdminAdapter())
+  const adminAdapter = adminAdapterRef.current
 
   // Mock data
   const elections = [

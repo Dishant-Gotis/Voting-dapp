@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Modal } from '@/components/Modal'
 import { useVotingMode } from '@/context/VotingContext'
 import { adapterFactory } from '@/adapters/AdapterFactory'
 import { getElectionWithParties, getElectionResults } from '@/services/supabaseClient'
+import toast from 'react-hot-toast'
 
 interface Party {
   id: string
@@ -16,6 +18,7 @@ interface Party {
 
 export const VotePage: React.FC = () => {
   const { mode } = useVotingMode()
+  const navigate = useNavigate()
   const votingAdapter = adapterFactory.getVotingAdapter()
   const electionAdapter = adapterFactory.getElectionAdapter()
   
@@ -28,6 +31,7 @@ export const VotePage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [electionId, setElectionId] = useState<string | null>(null)
   const [parties, setParties] = useState<Party[]>([])
+  const [showProofModal, setShowProofModal] = useState(false)
 
   // On first load, fetch active election and parties from backend (Supabase in DEMO)
   useEffect(() => {
@@ -98,17 +102,48 @@ export const VotePage: React.FC = () => {
     setIsSubmitting(true)
     try {
       // Call adapter based on mode
-      if (!electionId) throw new Error('Election not loaded')
+      if (!electionId) {
+        toast.error('Election not loaded. Please refresh the page.')
+        return
+      }
+      
       const result = await votingAdapter.castVote(electionId, selectedParty.id)
       console.log('Vote result:', result)
+      
+      // Check if vote was successful
+      if (!result.success) {
+        toast.error(result.message || 'Failed to cast vote')
+        setShowConfirmation(false)
+        return
+      }
+      
+      // Vote successful
+      toast.success('Vote recorded successfully!')
       setVoteResult(result)
       setVoted(true)
       setShowConfirmation(false)
-      // trigger a quick refresh to reflect new totals
-      // state polling above will also catch it
+      
+      // Trigger immediate refresh of vote counts
+      setTimeout(async () => {
+        try {
+          const ep = await getElectionWithParties(electionId)
+          if (ep) {
+            const resultsMap = await getElectionResults(electionId)
+            const totalVotes = Object.values(resultsMap).reduce((a: number, b: any) => a + (b as number), 0)
+            const mapped: Party[] = (ep.parties || []).map((p: any) => {
+              const count = (resultsMap as any)[p.id] || 0
+              const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0
+              return { id: p.id, name: p.name, emoji: '🗳️', votes: count, percentage: pct }
+            })
+            setParties(mapped)
+          }
+        } catch (e) {
+          console.error('Failed to refresh vote counts:', e)
+        }
+      }, 500)
     } catch (error) {
       console.error('Error casting vote:', error)
-      alert('Failed to cast vote. Please try again.')
+      toast.error(`Failed to cast vote: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -160,14 +195,71 @@ export const VotePage: React.FC = () => {
               </span>
             </p>
             <div className="flex gap-4">
-              <Button variant="primary">
+              <Button variant="primary" onClick={() => setShowProofModal(true)}>
                 View Proof
               </Button>
-              <Button variant="secondary">
+              <Button variant="secondary" onClick={() => navigate('/')}>
                 Return Home
               </Button>
             </div>
           </Card>
+
+          {/* Proof Modal */}
+          <Modal
+            isOpen={showProofModal}
+            onClose={() => setShowProofModal(false)}
+            title="Vote Proof & Certificate"
+            size="lg"
+          >
+            <div className="space-y-6">
+              <div className="text-center mb-6">
+                <div className="text-6xl mb-4">📜</div>
+                <h3 className="text-2xl font-bold text-green-400 mb-2">Vote Verified</h3>
+                <p className="text-slate-400">Your vote has been securely recorded and verified</p>
+              </div>
+              
+              <div className="bg-slate-800 rounded-lg p-6 space-y-4">
+                <div>
+                  <label className="text-sm text-slate-400 block mb-1">Vote ID</label>
+                  <p className="font-mono text-sm text-slate-200 break-all">{voteResult?.voteId}</p>
+                </div>
+                
+                {mode === 'DEMO' && voteResult?.proof?.certificateId && (
+                  <div>
+                    <label className="text-sm text-slate-400 block mb-1">Certificate ID</label>
+                    <p className="font-mono text-sm text-slate-200 break-all">{voteResult.proof.certificateId}</p>
+                  </div>
+                )}
+                
+                {mode === 'BLOCKCHAIN' && voteResult?.transactionHash && (
+                  <div>
+                    <label className="text-sm text-slate-400 block mb-1">Transaction Hash</label>
+                    <p className="font-mono text-sm text-slate-200 break-all">{voteResult.transactionHash}</p>
+                  </div>
+                )}
+                
+                <div>
+                  <label className="text-sm text-slate-400 block mb-1">Timestamp</label>
+                  <p className="text-slate-200">{new Date(voteResult?.timestamp).toLocaleString()}</p>
+                </div>
+                
+                <div>
+                  <label className="text-sm text-slate-400 block mb-1">Party Voted For</label>
+                  <p className="text-yellow-400 font-semibold">{selectedParty?.name}</p>
+                </div>
+              </div>
+
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <p className="text-green-400 text-sm">
+                  ✓ This vote is immutable and cannot be changed or deleted
+                </p>
+              </div>
+
+              <Button variant="primary" className="w-full" onClick={() => setShowProofModal(false)}>
+                Close
+              </Button>
+            </div>
+          </Modal>
         </div>
       </div>
     )

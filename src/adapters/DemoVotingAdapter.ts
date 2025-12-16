@@ -41,7 +41,7 @@ export class DemoVotingAdapter implements IVotingAdapter {
       }
 
       // Step 1: Check if voter exists in voters table, if not create one (auto-registration for demo)
-      let { data: voter, error: voterError } = await supabase
+      let { data: voter } = await supabase
         .from('voters')
         .select('id, is_eligible')
         .eq('election_id', electionId)

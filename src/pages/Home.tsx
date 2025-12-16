@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { adapterFactory } from '@/adapters/AdapterFactory'
 import type { Election } from '@/adapters/IElectionAdapter'
 
 export const HomePage: React.FC = () => {
+  const navigate = useNavigate()
   const [elections, setElections] = useState<Election[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -40,10 +42,10 @@ export const HomePage: React.FC = () => {
             Fast. Transparent. Immutable. Trusted by election commissions worldwide.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button variant="primary" size="lg">
+            <Button variant="primary" size="lg" onClick={() => navigate('/vote')}>
               Start Voting
             </Button>
-            <Button variant="secondary" size="lg">
+            <Button variant="secondary" size="lg" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}>
               Learn More
             </Button>
           </div>
@@ -186,10 +188,10 @@ export const HomePage: React.FC = () => {
             Join thousands of users voting securely on the blockchain.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button variant="primary" size="lg">
+            <Button variant="primary" size="lg" onClick={() => navigate('/vote')}>
               Vote Now
             </Button>
-            <Button variant="secondary" size="lg">
+            <Button variant="secondary" size="lg" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
               Learn More
             </Button>
           </div>

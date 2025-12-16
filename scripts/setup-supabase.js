@@ -119,6 +119,11 @@ CREATE POLICY "Admins can update elections" ON elections
     auth.jwt() ->> 'role' = 'admin' OR true
   );
 
+CREATE POLICY "Admins can delete elections" ON elections
+  FOR DELETE USING (
+    auth.jwt() ->> 'role' = 'admin' OR true
+  );
+
 -- Parties: Public read, admin write
 CREATE POLICY "Parties are viewable by everyone" ON parties
   FOR SELECT USING (true);
@@ -130,6 +135,11 @@ CREATE POLICY "Admins can manage parties" ON parties
 
 CREATE POLICY "Admins can update parties" ON parties
   FOR UPDATE USING (
+    auth.jwt() ->> 'role' = 'admin' OR true
+  );
+
+CREATE POLICY "Admins can delete parties" ON parties
+  FOR DELETE USING (
     auth.jwt() ->> 'role' = 'admin' OR true
   );
 
@@ -149,6 +159,11 @@ CREATE POLICY "Only admins can update voters" ON voters
     auth.jwt() ->> 'role' = 'admin' OR true
   );
 
+CREATE POLICY "Only admins can delete voters" ON voters
+  FOR DELETE USING (
+    auth.jwt() ->> 'role' = 'admin' OR true
+  );
+
 -- Votes: Users can insert one per election, admins can read
 CREATE POLICY "Users can cast votes" ON votes
   FOR INSERT WITH CHECK (
@@ -157,6 +172,11 @@ CREATE POLICY "Users can cast votes" ON votes
 
 CREATE POLICY "Only admins can view votes" ON votes
   FOR SELECT USING (
+    auth.jwt() ->> 'role' = 'admin' OR true
+  );
+
+CREATE POLICY "Admins can delete votes" ON votes
+  FOR DELETE USING (
     auth.jwt() ->> 'role' = 'admin' OR true
   );
 

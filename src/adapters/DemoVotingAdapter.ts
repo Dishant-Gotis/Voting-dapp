@@ -40,22 +40,37 @@ export class DemoVotingAdapter implements IVotingAdapter {
         }
       }
 
-      // Step 1: Check if voter exists in voters table
-      const { data: voter, error: voterError } = await supabase
+      // Step 1: Check if voter exists in voters table, if not create one (auto-registration for demo)
+      let { data: voter, error: voterError } = await supabase
         .from('voters')
         .select('id, is_eligible')
         .eq('election_id', electionId)
         .eq('wallet_address', this.walletAddress)
-        .single()
+        .maybeSingle()
 
-      if (voterError || !voter) {
-        return {
-          success: false,
-          voteId: '',
-          message: 'You are not registered as an eligible voter in this election.',
-          timestamp: Date.now(),
-          proof: {}
+      // Auto-register voter if not exists (for demo mode ease of use)
+      if (!voter) {
+        const { data: newVoter, error: insertError } = await supabase
+          .from('voters')
+          .insert({
+            election_id: electionId,
+            wallet_address: this.walletAddress,
+            is_eligible: true,
+            created_at: Date.now()
+          })
+          .select('id, is_eligible')
+          .single()
+
+        if (insertError || !newVoter) {
+          return {
+            success: false,
+            voteId: '',
+            message: 'Failed to register voter. Please try again.',
+            timestamp: Date.now(),
+            proof: {}
+          }
         }
+        voter = newVoter
       }
 
       if (!voter.is_eligible) {
